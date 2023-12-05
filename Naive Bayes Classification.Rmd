@@ -1,0 +1,119 @@
+---
+title: "Naive Bayes Classification"
+author: "Erin Tafarshiku"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+userReviews <- merge( review_data_small, user_data_small, by="user_id")
+
+install.packages("tm")
+install.packages("SnowballC")
+install.packages("tidytext")
+install.packages("dplyr")
+install.packages("caret")
+install.packages("e1071")
+install.packages("ggplot2")
+
+library(tm)
+library(SnowballC)
+library(tidytext)
+library(dplyr)
+library(caret)
+library(e1071)
+library(ggplot2)
+
+# Sample a subset of userReviews for computational efficiency
+set.seed(1)
+sampledReviews <- userReviews[sample(nrow(userReviews), 90000), ]
+
+# Text processing
+corpus <- Corpus(VectorSource(sampledReviews$text))
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stripWhitespace)
+
+# Create and filter the Document-Term Matrix
+dtm <- DocumentTermMatrix(corpus)
+sparseDtm <- removeSparseTerms(dtm, 0.95)
+
+# Convert to a data frame
+reviews_df <- as.data.frame(as.matrix(sparseDtm))
+colnames(reviews_df) <- make.names(colnames(reviews_df))
+reviews_df$stars <- factor(sampledReviews$stars, levels = 1:5)
+
+# Splitting the data into training and test sets
+set.seed(1)
+trainingIndex <- createDataPartition(reviews_df$stars, p = .8999, list = FALSE)
+trainingData <- reviews_df[trainingIndex, ]
+testData <- reviews_df[-trainingIndex, ]
+
+# Training the Naive Bayes model
+model <- naiveBayes(stars ~ ., data = trainingData)
+
+# Making predictions
+predictions <- predict(model, testData)
+
+# Evaluate the model
+confMat <- confusionMatrix(predictions, testData$stars)
+print(confMat)
+
+# Compute and print the accuracy
+accuracy <- sum(diag(confMat$table)) / sum(confMat$table)
+print(paste("Accuracy:", accuracy))
+
+
+# Visualisation
+visualization_df <- data.frame(Actual = testData$stars, Predicted = predictions)
+ggplot(visualization_df, aes(x = Actual, fill = Predicted)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Actual vs. Predicted Star Ratings", x = "Actual Star Ratings", y = "Count") +
+  scale_fill_discrete(name = "Predicted Stars") +
+  theme_minimal()
+
+
+# Load necessary libraries
+install.packages("tidytext")
+install.packages("dplyr")
+install.packages("tibble")
+
+library(tidytext)
+library(dplyr)
+library(tibble)
+
+# Unnest tokens to separate words
+word_sentiments <- sampledReviews %>%
+  unnest_tokens(word, text) %>%
+  inner_join(get_sentiments("bing"))
+
+# Count the number of positive and negative words
+word_sentiment_counts <- word_sentiments %>%
+  group_by(sentiment) %>%
+  count(word, sort = TRUE)
+
+# Display the sentiment counts for both positive and negative words
+print(word_sentiment_counts)
+
+# Separate positive and negative words
+positive_words <- word_sentiments %>%
+  filter(sentiment == "positive") %>%
+  count(word, sort = TRUE)
+
+negative_words <- word_sentiments %>%
+  filter(sentiment == "negative") %>%
+  count(word, sort = TRUE)
+
+# Print out the top positive and negative words
+print(positive_words)
+print(negative_words)
+
+```
+
+
